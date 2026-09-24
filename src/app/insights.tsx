@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AiAnalysisCard } from '@/components/AiAnalysisCard';
 import { ScoreLineChart } from '@/components/charts/ScoreLineChart';
 import { TimeBarChart } from '@/components/charts/TimeBarChart';
 import {
@@ -60,6 +61,8 @@ export default function InsightsScreen() {
           );
         })}
       </View>
+
+      <AiAnalysisCard sessions={inWindow} />
 
       {inWindow.length === 0 ? (
         <View style={[styles.noData, { backgroundColor: c.surface, borderColor: c.border }]}>

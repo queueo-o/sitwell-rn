@@ -260,6 +260,20 @@ export default function SettingsScreen() {
           subtitle="Readings are received over Bluetooth and not uploaded"
         />
         <Divider c={c} />
+        <InfoRow
+          c={c}
+          icon="sparkles"
+          title="Optional OpenAI analysis"
+          subtitle="Session summaries are sent only when you tap Analyze on Insights"
+        />
+        <Divider c={c} />
+        <InfoRow
+          c={c}
+          icon="key"
+          title="Your API key"
+          subtitle="Held in this device's secure keychain; removed by Clear All Data"
+        />
+        <Divider c={c} />
         <View style={styles.row}>
           <Ionicons name="trash" size={18} color={c.pink} style={{ marginRight: 12 }} />
           <View style={{ flex: 1 }}>

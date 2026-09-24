@@ -61,13 +61,27 @@ velostat. Parsing lives in `src/services/postureProtocol.ts`; the transport is
 
 ## What is NOT needed from you
 
-`react-native-svg` (charts) and `@react-native-async-storage/async-storage`
-(saved settings and session history) are both bundled inside Expo Go, so they
-already work without a build. **`react-native-ble-plx` is the only module that
-requires the development build.**
+These are all bundled inside Expo Go and already work without a build:
+
+- `react-native-svg` — charts
+- `@react-native-async-storage/async-storage` — saved settings and history
+- `expo-secure-store` — the user's own OpenAI key, if they add one
+
+**`react-native-ble-plx` is the only module that requires the development
+build.**
+
+## A note on API keys
+
+The original Flutter app shipped a shared OpenAI "trial" key inside a bundled
+`.env` asset. That is not carried over. Bundled assets are extractable from any
+installed build, and a real key did end up committed in the Flutter repo.
+
+This port has no bundled key and no `.env`. The optional AI analysis works only
+if a user supplies their own key, which is kept in the device keychain via
+`expo-secure-store` and billed to their own OpenAI account. Nothing secret is
+in this repository.
 
 ## Known follow-ups
 
 - iOS reconnection is faster if `IOS_PERIPHERAL_ID` in `src/services/bleService.ts`
   is filled in with the peripheral UUID printed on first connect.
-- The optional OpenAI analysis card from the original Flutter app is not ported.

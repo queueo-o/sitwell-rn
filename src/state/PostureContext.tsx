@@ -37,6 +37,7 @@ import {
   seedSessions,
   trendFromDelta,
 } from '../models/sessionRecord';
+import { removeApiKey } from '../services/aiAnalysis';
 import { bleService } from '../services/bleService';
 import { ProtocolEvent, ProtocolParser } from '../services/postureProtocol';
 import { KEYS, clearStored, loadJson, saveJson } from '../services/storage';
@@ -972,6 +973,9 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
     if (bleService.isAvailable()) await bleService.disconnect();
 
     await clearStored();
+    // Mirrors AiAnalysisProvider.clearPrivateData() — the OpenAI key lives in
+    // the keychain, not AsyncStorage, so clearStored() alone would leave it.
+    await removeApiKey();
     // sessionHistory: [] rather than the seeds — and the save effect writes
     // that empty array back, so a restart stays cleared.
     setState(() => ({ ...initialState(), sessionHistory: [] }));
