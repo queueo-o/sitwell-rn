@@ -111,15 +111,21 @@ function ConnectGate({ c }: { c: AppColors }) {
         </Text>
       </Pressable>
 
-      {p.connectionError && (
+      {p.connectionError && !p.demoModeEnabled && (
         <Text style={[styles.gateError, { color: c.pink }]}>{p.connectionError}</Text>
       )}
 
-      {!p.bleAvailable && (
-        <Text style={[styles.gateNote, { color: c.textMuted }]}>
-          Bluetooth needs the development build. Connecting here starts a simulated session so
-          you can explore the app.
+      {p.demoModeEnabled ? (
+        <Text style={[styles.gateNote, { color: c.accent }]}>
+          Demo mode is on — connecting starts a simulated session.
         </Text>
+      ) : (
+        !p.bleAvailable && (
+          <Text style={[styles.gateNote, { color: c.textMuted }]}>
+            Bluetooth needs the development build, so connecting will not find the chair here.
+            Turn on Demo mode in Settings to explore the app with simulated data.
+          </Text>
+        )
       )}
     </View>
   );
@@ -167,7 +173,7 @@ function Connected({ c, scoreColor }: { c: AppColors; scoreColor: string }) {
         )}
       </View>
 
-      <ChairMap c={c} />
+      <ChairMap c={c} compact />
 
       <View style={styles.statRow}>
         <Stat label="ELAPSED" value={formatDuration(p.sessionDurationMs)} c={c} />

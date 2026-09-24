@@ -1,14 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useRef, useState } from 'react';
-import {
-  Animated,
-  FlatList,
-  PanResponder,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { BottomToast } from '@/components/BottomToast';
 import { SessionRecord, activeLabel, timeLabel } from '@/models/sessionRecord';
@@ -53,28 +53,30 @@ export default function HistoryScreen() {
   const [pendingUndo, setPendingUndo] = useState<SessionRecord | null>(null);
 
   const sessions = useMemo(() => {
-    const now = new Date();
-    const today = startOfDay(now);
+    const today = startOfDay(new Date());
     return p.visibleHistory.filter((s) => {
       if (filter === 'high') return s.score > 90;
       if (filter === 'week') {
-        const weekAgo = new Date(today);
-        weekAgo.setDate(weekAgo.getDate() - 6);
-        return startOfDay(s.startedAt).getTime() >= weekAgo.getTime();
+        const from = new Date(today);
+        from.setDate(from.getDate() - 6);
+        return startOfDay(s.startedAt).getTime() >= from.getTime();
       }
       if (filter === 'month') {
-        const monthAgo = new Date(today);
-        monthAgo.setDate(monthAgo.getDate() - 29);
-        return startOfDay(s.startedAt).getTime() >= monthAgo.getTime();
+        const from = new Date(today);
+        from.setDate(from.getDate() - 29);
+        return startOfDay(s.startedAt).getTime() >= from.getTime();
       }
       return true;
     });
   }, [p.visibleHistory, filter]);
 
-  const handleDelete = (record: SessionRecord) => {
-    p.removeSession(record.id);
-    setPendingUndo(record);
-  };
+  const handleDelete = useCallback(
+    (record: SessionRecord) => {
+      p.removeSession(record.id);
+      setPendingUndo(record);
+    },
+    [p],
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
@@ -105,7 +107,7 @@ export default function HistoryScreen() {
       </View>
 
       <FlatList
-        contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + 60 }]}
+        contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + 70 }]}
         data={sessions}
         keyExtractor={(s) => String(s.id)}
         ListEmptyComponent={
@@ -125,7 +127,7 @@ export default function HistoryScreen() {
                   {dayLabel(item.startedAt).toUpperCase()}
                 </Text>
               )}
-              <SwipeRow record={item} c={c} onDelete={() => handleDelete(item)} />
+              <SwipeRow record={item} c={c} onDelete={handleDelete} />
             </>
           );
         }}
@@ -149,7 +151,9 @@ export default function HistoryScreen() {
   );
 }
 
-/** Drag left or right past the threshold to delete. */
+const DISMISS_PX = 110;
+const SPRING = { damping: 22, stiffness: 240, mass: 0.7 };
+
 function SwipeRow({
   record,
   c,
@@ -157,29 +161,48 @@ function SwipeRow({
 }: {
   record: SessionRecord;
   c: AppColors;
-  onDelete: () => void;
+  onDelete: (r: SessionRecord) => void;
 }) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(1)).current;
+  const tx = useSharedValue(0);
+  const opacity = useSharedValue(1);
 
-  const pan = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) =>
-        Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
-      onPanResponderMove: (_, g) => translateX.setValue(g.dx),
-      onPanResponderRelease: (_, g) => {
-        if (Math.abs(g.dx) > 120 || Math.abs(g.vx) > 0.8) {
-          const to = g.dx > 0 ? 500 : -500;
-          Animated.parallel([
-            Animated.timing(translateX, { toValue: to, duration: 180, useNativeDriver: true }),
-            Animated.timing(opacity, { toValue: 0, duration: 180, useNativeDriver: true }),
-          ]).start(onDelete);
-        } else {
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-        }
-      },
-    }),
-  ).current;
+  const remove = useCallback(() => onDelete(record), [onDelete, record]);
+
+  /**
+   * activeOffsetX/failOffsetY are what make this usable inside a scrolling
+   * list: the pan only claims the gesture once it is clearly horizontal, and
+   * bails the moment it looks like a vertical scroll. Without them the row and
+   * the FlatList fight over every touch, which is what left rows stranded
+   * half-swiped.
+   */
+  const pan = Gesture.Pan()
+    .activeOffsetX([-16, 16])
+    .failOffsetY([-14, 14])
+    .onUpdate((e) => {
+      tx.value = e.translationX;
+    })
+    .onEnd((e) => {
+      const go = Math.abs(e.translationX) > DISMISS_PX || Math.abs(e.velocityX) > 800;
+      if (go) {
+        const dir = e.translationX === 0 ? Math.sign(e.velocityX) : Math.sign(e.translationX);
+        tx.value = withTiming(dir * 520, { duration: 170 });
+        opacity.value = withTiming(0, { duration: 170 }, (done) => {
+          if (done) runOnJS(remove)();
+        });
+      } else {
+        tx.value = withSpring(0, SPRING);
+      }
+    });
+
+  const rowStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateX: tx.value }],
+  }));
+
+  // Backdrop fades in as the row travels, so the intent reads before release.
+  const hintStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(Math.abs(tx.value) / DISMISS_PX, 1),
+  }));
 
   const scoreColor =
     record.score >= 90
@@ -195,42 +218,33 @@ function SwipeRow({
 
   return (
     <View style={styles.rowWrap}>
-      <View style={[styles.deleteHint, { backgroundColor: `${c.pink}26` }]}>
-        <Ionicons name="trash" size={16} color={c.pink} />
-        <Ionicons name="trash" size={16} color={c.pink} />
-      </View>
-
-      <Animated.View
-        {...pan.panHandlers}
-        style={[
-          styles.row,
-          {
-            backgroundColor: c.surface,
-            borderColor: c.border,
-            opacity,
-            transform: [{ translateX }],
-          },
-        ]}>
-        <View style={[styles.scoreBox, { backgroundColor: c.surfaceDeep }]}>
-          <Text style={[styles.score, { color: scoreColor }]}>{record.score}</Text>
-        </View>
-
-        <View style={styles.info}>
-          <View style={styles.titleRow}>
-            <Text style={[styles.title, { color: c.textPri }]}>{record.name}</Text>
-            <Ionicons name={TREND_ICON[record.trend]} size={14} color={trendColor} />
-            {record.isSeed && (
-              <Text style={[styles.sampleTag, { color: c.textMuted }]}>sample</Text>
-            )}
-          </View>
-          <Text style={[styles.meta, { color: c.textMuted }]}>
-            {timeLabel(record.startedAt)} · {activeLabel(record)} active
-          </Text>
-          <Text style={[styles.meta, { color: c.textMuted }]}>
-            {record.slouches} slouches
-          </Text>
-        </View>
+      <Animated.View style={[styles.deleteHint, { backgroundColor: `${c.pink}2E` }, hintStyle]}>
+        <Ionicons name="trash" size={17} color={c.pink} />
+        <Ionicons name="trash" size={17} color={c.pink} />
       </Animated.View>
+
+      <GestureDetector gesture={pan}>
+        <Animated.View
+          style={[styles.row, { backgroundColor: c.surface, borderColor: c.border }, rowStyle]}>
+          <View style={[styles.scoreBox, { backgroundColor: c.surfaceDeep }]}>
+            <Text style={[styles.score, { color: scoreColor }]}>{record.score}</Text>
+          </View>
+
+          <View style={styles.info}>
+            <View style={styles.titleRow}>
+              <Text style={[styles.title, { color: c.textPri }]}>{record.name}</Text>
+              <Ionicons name={TREND_ICON[record.trend]} size={14} color={trendColor} />
+              {record.isSeed && (
+                <Text style={[styles.sampleTag, { color: c.textMuted }]}>sample</Text>
+              )}
+            </View>
+            <Text style={[styles.meta, { color: c.textMuted }]}>
+              {timeLabel(record.startedAt)} · {activeLabel(record)} active
+            </Text>
+            <Text style={[styles.meta, { color: c.textMuted }]}>{record.slouches} slouches</Text>
+          </View>
+        </Animated.View>
+      </GestureDetector>
     </View>
   );
 }

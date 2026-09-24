@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Logo } from '@/components/Logo';
 import { PostureProvider } from '@/state/PostureContext';
@@ -16,13 +17,16 @@ export default function RootLayout() {
     SplashScreen.hideAsync();
   }, []);
 
-  // ThemeProvider must wrap AppTabs so useAppColors can see the manual override.
+  // GestureHandlerRootView must be the outermost view or swipes never fire.
+  // ThemeProvider wraps AppTabs so useAppColors can see the manual override.
   return (
-    <ThemeProvider>
-      <PostureProvider>
-        <AppTabs />
-      </PostureProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <PostureProvider>
+          <AppTabs />
+        </PostureProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
 

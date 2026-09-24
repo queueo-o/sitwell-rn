@@ -15,16 +15,26 @@ export interface SensorConfig {
   isActive: boolean;
 }
 
+/**
+ * Physical pin (fsrN) → position on the chair.
+ *
+ * The firmware assigns types by pin: fsr1/fsr2 circle, fsr3/fsr4 square,
+ * fsr5 velostat_seat, fsr6 velostat_back. The seat/back suffix on the two
+ * velostats is the giveaway — fsr6 belongs on the backrest, fsr5 on the seat.
+ *
+ *   Backrest  S1 fsr3 square · S2 fsr4 square · S3 fsr6 velostat (back)
+ *   Seat      S1 fsr1 circle · S2 fsr2 circle · S3 fsr5 velostat (seat)
+ */
 export function defaultSensors(): SensorConfig[] {
   return [
-    // Backrest: 2 circle FSRs + 1 square FSR
-    { key: 'fsr1', hardwareType: 'circle', displayName: 'S1_UPPER', isActive: true },
-    { key: 'fsr2', hardwareType: 'circle', displayName: 'S2_UPPER', isActive: true },
-    { key: 'fsr3', hardwareType: 'square', displayName: 'S3_UPPER', isActive: true },
-    // Seat: 2 square FSRs + 1 velostat
-    { key: 'fsr4', hardwareType: 'square', displayName: 'S1_LOWER', isActive: true },
-    { key: 'fsr5', hardwareType: 'velostat', displayName: 'S2_LOWER', isActive: true },
-    { key: 'fsr6', hardwareType: 'velostat', displayName: 'S3_LOWER', isActive: true },
+    // Backrest
+    { key: 'fsr3', hardwareType: 'square', displayName: 'S1_UPPER', isActive: true },
+    { key: 'fsr4', hardwareType: 'square', displayName: 'S2_UPPER', isActive: true },
+    { key: 'fsr6', hardwareType: 'velostat', displayName: 'S3_UPPER', isActive: true },
+    // Seat
+    { key: 'fsr1', hardwareType: 'circle', displayName: 'S1_LOWER', isActive: true },
+    { key: 'fsr2', hardwareType: 'circle', displayName: 'S2_LOWER', isActive: true },
+    { key: 'fsr5', hardwareType: 'velostat', displayName: 'S3_LOWER', isActive: true },
   ];
 }
 

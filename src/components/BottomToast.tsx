@@ -1,14 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef } from 'react';
-import { Animated, PanResponder, Pressable, StyleSheet, Text } from 'react-native';
+import { useCallback, useEffect } from 'react';
+import { Pressable, StyleSheet, Text } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { AppColors } from '@/theme/colors';
 
-const HIDDEN = 160;
+const HIDDEN = 180;
+const SPRING = { damping: 20, stiffness: 220, mass: 0.7 };
 
 /**
- * Toast pinned above the tab bar. Swipe down (or sideways) to dismiss, or wait
- * for it to auto-hide. Optionally carries a single action, e.g. Undo.
+ * Toast pinned above the tab bar. Flick it in any direction to dismiss.
+ *
+ * Gestures run through gesture-handler + Reanimated so the drag is driven on
+ * the UI thread — a PanResponder version stuttered and could be left stranded
+ * mid-swipe when the JS thread was busy rendering sensor updates.
  */
 export function BottomToast({
   visible,
@@ -31,65 +43,59 @@ export function BottomToast({
   c: AppColors;
   bottomOffset?: number;
 }) {
-  const translateY = useRef(new Animated.Value(HIDDEN)).current;
-  const translateX = useRef(new Animated.Value(0)).current;
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ty = useSharedValue(HIDDEN);
+  const tx = useSharedValue(0);
+  const opacity = useSharedValue(1);
 
-  const hide = useRef(() => {});
-  hide.current = () => {
-    Animated.timing(translateY, {
-      toValue: HIDDEN,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      translateX.setValue(0);
-      onDismiss();
+  const finish = useCallback(() => onDismiss(), [onDismiss]);
+
+  const dismiss = useCallback(() => {
+    ty.value = withTiming(HIDDEN, { duration: 180 });
+    opacity.value = withTiming(0, { duration: 180 }, (done) => {
+      if (done) runOnJS(finish)();
     });
-  };
+  }, [finish, opacity, ty]);
 
   useEffect(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    if (visible) {
-      translateX.setValue(0);
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        damping: 18,
-        stiffness: 180,
-      }).start();
-      if (autoHideMs > 0) {
-        hideTimer.current = setTimeout(() => hide.current(), autoHideMs);
-      }
-    } else {
-      translateY.setValue(HIDDEN);
-    }
-    return () => {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-    };
-  }, [visible, autoHideMs, translateY, translateX]);
+    if (!visible) return;
+    tx.value = 0;
+    ty.value = HIDDEN;
+    opacity.value = 1;
+    ty.value = withSpring(0, SPRING);
 
-  const pan = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) =>
-        Math.abs(g.dy) > 6 || Math.abs(g.dx) > 6,
-      onPanResponderMove: (_, g) => {
-        if (g.dy > 0) translateY.setValue(g.dy);
-        translateX.setValue(g.dx);
-      },
-      onPanResponderRelease: (_, g) => {
-        const flung = g.dy > 45 || Math.abs(g.dx) > 90 || g.vy > 0.7;
-        if (flung) {
-          if (hideTimer.current) clearTimeout(hideTimer.current);
-          hide.current();
-        } else {
-          Animated.parallel([
-            Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),
-            Animated.spring(translateX, { toValue: 0, useNativeDriver: true }),
-          ]).start();
-        }
-      },
-    }),
-  ).current;
+    if (autoHideMs <= 0) return;
+    const t = setTimeout(dismiss, autoHideMs);
+    return () => clearTimeout(t);
+  }, [visible, autoHideMs, dismiss, opacity, tx, ty]);
+
+  const pan = Gesture.Pan()
+    .onUpdate((e) => {
+      // Downward and sideways drag both track the finger; upward resists.
+      ty.value = e.translationY > 0 ? e.translationY : e.translationY * 0.25;
+      tx.value = e.translationX;
+    })
+    .onEnd((e) => {
+      const flung =
+        e.translationY > 40 ||
+        Math.abs(e.translationX) > 80 ||
+        e.velocityY > 600 ||
+        Math.abs(e.velocityX) > 700;
+      if (flung) {
+        ty.value = withTiming(HIDDEN, { duration: 160 });
+        tx.value = withTiming(Math.sign(e.translationX) * 240, { duration: 160 });
+        opacity.value = withTiming(0, { duration: 160 }, (done) => {
+          if (done) runOnJS(finish)();
+        });
+      } else {
+        ty.value = withSpring(0, SPRING);
+        tx.value = withSpring(0, SPRING);
+      }
+    });
+
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: ty.value }, { translateX: tx.value }],
+  }));
 
   if (!visible) return null;
 
@@ -97,54 +103,49 @@ export function BottomToast({
   const fg = tone === 'neutral' ? c.textPri : c.bg;
 
   return (
-    <Animated.View
-      {...pan.panHandlers}
-      style={[
-        styles.toast,
-        {
-          bottom: bottomOffset + 12,
-          backgroundColor: bg,
-          borderColor: tone === 'neutral' ? c.border : 'transparent',
-          transform: [{ translateY }, { translateX }],
-        },
-      ]}>
-      <Ionicons
-        name={
-          tone === 'warning'
-            ? 'alert-circle'
-            : tone === 'suggestion'
-              ? 'bulb'
-              : 'information-circle'
-        }
-        size={18}
-        color={fg}
-      />
-      <Text style={[styles.text, { color: fg }]} numberOfLines={2}>
-        {message}
-      </Text>
+    <GestureDetector gesture={pan}>
+      <Animated.View
+        style={[
+          styles.toast,
+          {
+            bottom: bottomOffset + 12,
+            backgroundColor: bg,
+            borderColor: tone === 'neutral' ? c.border : 'transparent',
+          },
+          style,
+        ]}>
+        <Ionicons
+          name={
+            tone === 'warning'
+              ? 'alert-circle'
+              : tone === 'suggestion'
+                ? 'bulb'
+                : 'information-circle'
+          }
+          size={18}
+          color={fg}
+        />
+        <Text style={[styles.text, { color: fg }]} numberOfLines={2}>
+          {message}
+        </Text>
 
-      {actionLabel && onAction && (
-        <Pressable
-          onPress={() => {
-            if (hideTimer.current) clearTimeout(hideTimer.current);
-            onAction();
-            hide.current();
-          }}
-          hitSlop={8}
-          style={styles.action}>
-          <Text style={[styles.actionText, { color: fg }]}>{actionLabel}</Text>
+        {actionLabel && onAction && (
+          <Pressable
+            onPress={() => {
+              onAction();
+              dismiss();
+            }}
+            hitSlop={10}
+            style={styles.action}>
+            <Text style={[styles.actionText, { color: fg }]}>{actionLabel}</Text>
+          </Pressable>
+        )}
+
+        <Pressable onPress={dismiss} hitSlop={10}>
+          <Ionicons name="close" size={16} color={fg} />
         </Pressable>
-      )}
-
-      <Pressable
-        onPress={() => {
-          if (hideTimer.current) clearTimeout(hideTimer.current);
-          hide.current();
-        }}
-        hitSlop={8}>
-        <Ionicons name="close" size={16} color={fg} />
-      </Pressable>
-    </Animated.View>
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
@@ -169,5 +170,10 @@ const styles = StyleSheet.create({
   },
   text: { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
   action: { paddingHorizontal: 8, paddingVertical: 2 },
-  actionText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, textDecorationLine: 'underline' },
+  actionText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textDecorationLine: 'underline',
+  },
 });

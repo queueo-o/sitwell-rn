@@ -155,17 +155,26 @@ export default function SettingsScreen() {
         />
       </View>
 
-      {/* ── Data ───────────────────────────────────────────────────────── */}
-      <SectionLabel c={c}>DATA</SectionLabel>
+      {/* ── Demo mode ──────────────────────────────────────────────────── */}
+      <SectionLabel c={c}>DEMO MODE</SectionLabel>
       <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border, padding: 0 }]}>
         <ToggleRow
           c={c}
-          title="Show sample data"
-          subtitle="Built-in example sessions on History and Insights"
-          value={p.showDemoData}
-          onChange={p.saveShowDemoData}
+          title="Demo mode"
+          subtitle={
+            p.demoModeEnabled
+              ? 'Simulated sensors, calibration and sample history'
+              : 'Off — everything comes from the hardware over Bluetooth'
+          }
+          value={p.demoModeEnabled}
+          onChange={p.saveDemoMode}
         />
       </View>
+      <Text style={[styles.sectionNote, { color: c.textMuted }]}>
+        Turning this on replaces every reading, score and calibration with simulated data and
+        shows the built-in sample sessions. With it off, the app only ever shows what the chair
+        actually reports. Switching either way ends the current session.
+      </Text>
 
       {/* ── Appearance ─────────────────────────────────────────────────── */}
       <SectionLabel c={c}>APPEARANCE</SectionLabel>
@@ -410,6 +419,7 @@ function InfoRow({
 const styles = StyleSheet.create({
   scroll: { padding: 16, paddingBottom: 40, gap: 8 },
   sectionLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 2, marginTop: 14 },
+  sectionNote: { fontSize: 11, lineHeight: 16, paddingHorizontal: 2 },
 
   card: { borderRadius: 16, borderWidth: 1, padding: 16 },
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12 },

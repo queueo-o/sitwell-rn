@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ChairMap } from '@/components/ChairMap';
 import { SensorConfig, deviationThreshold, pressureNorm } from '@/models/sensorConfig';
 import { usePosture } from '@/state/PostureContext';
 import { AppColors } from '@/theme/colors';
@@ -98,7 +99,9 @@ export default function SensorsScreen() {
         <Text style={[styles.btnText, { color: c.textPri }]}>RUN SENSOR CHECK</Text>
       </Pressable>
 
-      {/* Chair map */}
+      <ChairMap c={c} />
+
+      {/* Raw sensor matrix */}
       <Text style={[styles.section, { color: c.textMuted }]}>BACKREST</Text>
       <View style={styles.grid}>
         {upper.map((s) => (

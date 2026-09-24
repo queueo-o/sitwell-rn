@@ -93,8 +93,12 @@ interface PostureState {
   postureReminders: boolean;
   sessionSummaries: boolean;
   streakNudges: boolean;
-  /** Hides the built-in sample sessions from History and Insights. */
-  showDemoData: boolean;
+  /**
+   * Master switch. On: simulated sensors, calibration, scores and sample
+   * history. Off (the default): everything comes from the real hardware over
+   * BLE, and nothing invented is shown anywhere.
+   */
+  demoModeEnabled: boolean;
 
   hardwareCheckState: HardwareCheckState;
   hardwareCheckMessage: string;
@@ -133,7 +137,7 @@ function initialState(): PostureState {
     postureReminders: true,
     sessionSummaries: true,
     streakNudges: false,
-    showDemoData: true,
+    demoModeEnabled: false,
 
     hardwareCheckState: 'notRun',
     hardwareCheckMessage: HARDWARE_CHECK_IDLE,
@@ -149,7 +153,7 @@ interface PersistedPrefs {
   postureReminders: boolean;
   sessionSummaries: boolean;
   streakNudges: boolean;
-  showDemoData: boolean;
+  demoModeEnabled: boolean;
   sensors: { key: string; displayName: string; isActive: boolean }[];
 }
 
@@ -258,11 +262,11 @@ interface PostureContextValue extends PostureState {
   savePostureReminders: (v: boolean) => void;
   saveSessionSummaries: (v: boolean) => void;
   saveStreakNudges: (v: boolean) => void;
-  saveShowDemoData: (v: boolean) => void;
+  saveDemoMode: (v: boolean) => void;
   clearAllData: () => Promise<void>;
   removeSession: (id: number) => void;
   restoreSession: (session: SessionRecord) => void;
-  /** sessionHistory minus the sample sessions when they're hidden. */
+  /** sessionHistory minus the sample sessions when demo mode is off. */
   visibleHistory: SessionRecord[];
 }
 
@@ -689,9 +693,10 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const connect = useCallback(async () => {
-    // Checked live rather than via the memo: if the manager failed to start at
-    // any point the service latches unavailable, and demo is the usable path.
-    if (!bleService.isAvailable()) {
+    // Demo mode is an explicit choice now, not a fallback: with it off we only
+    // ever talk to real hardware, and failing is more honest than inventing
+    // readings the user might mistake for their own posture.
+    if (stateRef.current.demoModeEnabled) {
       enableDemoMode();
       return;
     }
@@ -974,9 +979,32 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
     setState((prev) => ({ ...prev, streakNudges: v }));
   }, []);
 
-  const saveShowDemoData = useCallback((v: boolean) => {
-    setState((prev) => ({ ...prev, showDemoData: v }));
-  }, []);
+  /**
+   * Flipping the master switch tears down whatever session is running, so the
+   * two worlds never mix — turning demo off mid-simulation must not leave
+   * invented readings on screen.
+   */
+  const saveDemoMode = useCallback(
+    (v: boolean) => {
+      stopDemoLoop();
+      stopReadingsPoll();
+      postureBadSince.current = null;
+      recalibrateSuggested.current = false;
+      if (!v && bleService.isAvailable()) void bleService.disconnect();
+
+      setState((prev) => ({
+        ...initialState(),
+        sensors: prev.sensors,
+        sessionHistory: prev.sessionHistory,
+        sessionGoalMinutes: prev.sessionGoalMinutes,
+        postureReminders: prev.postureReminders,
+        sessionSummaries: prev.sessionSummaries,
+        streakNudges: prev.streakNudges,
+        demoModeEnabled: v,
+      }));
+    },
+    [stopDemoLoop, stopReadingsPoll],
+  );
 
   /** Wipes history and returns every setting to its default. Not undoable. */
   const clearAllData = useCallback(async () => {
@@ -1033,15 +1061,26 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
           next.postureReminders = prefs.postureReminders ?? prev.postureReminders;
           next.sessionSummaries = prefs.sessionSummaries ?? prev.sessionSummaries;
           next.streakNudges = prefs.streakNudges ?? prev.streakNudges;
-          next.showDemoData = prefs.showDemoData ?? prev.showDemoData;
+          next.demoModeEnabled = prefs.demoModeEnabled ?? prev.demoModeEnabled;
           if (Array.isArray(prefs.sensors)) {
             // Merge by key so a firmware change that adds or renames a sensor
             // slot doesn't resurrect stale entries.
+            //
+            // A saved name that is merely an old default is discarded: the
+            // fsr→position mapping was corrected (fsr6 is the backrest
+            // velostat, fsr5 the seat one), so stale defaults would label the
+            // chair map wrongly. Names the user actually typed are kept.
+            const defaultNames = new Set(defaultSensors().map((d) => d.displayName));
             next.sensors = prev.sensors.map((s) => {
               const saved = prefs.sensors.find((x) => x.key === s.key);
-              return saved
-                ? { ...s, displayName: saved.displayName, isActive: saved.isActive }
-                : s;
+              if (!saved) return s;
+              return {
+                ...s,
+                displayName: defaultNames.has(saved.displayName)
+                  ? s.displayName
+                  : saved.displayName,
+                isActive: saved.isActive,
+              };
             });
           }
         }
@@ -1064,7 +1103,7 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
       postureReminders: state.postureReminders,
       sessionSummaries: state.sessionSummaries,
       streakNudges: state.streakNudges,
-      showDemoData: state.showDemoData,
+      demoModeEnabled: state.demoModeEnabled,
       sensors: state.sensors.map((s) => ({
         key: s.key,
         displayName: s.displayName,
@@ -1077,7 +1116,7 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
     state.postureReminders,
     state.sessionSummaries,
     state.streakNudges,
-    state.showDemoData,
+    state.demoModeEnabled,
     state.sensors,
   ]);
 
@@ -1165,11 +1204,11 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
       savePostureReminders,
       saveSessionSummaries,
       saveStreakNudges,
-      saveShowDemoData,
+      saveDemoMode,
       clearAllData,
       removeSession,
       restoreSession,
-      visibleHistory: state.showDemoData
+      visibleHistory: state.demoModeEnabled
         ? state.sessionHistory
         : state.sessionHistory.filter((s) => !s.isSeed),
     };
@@ -1194,7 +1233,7 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
     savePostureReminders,
     saveSessionSummaries,
     saveStreakNudges,
-    saveShowDemoData,
+    saveDemoMode,
     clearAllData,
     removeSession,
     restoreSession,
