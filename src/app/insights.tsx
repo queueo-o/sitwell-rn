@@ -23,7 +23,7 @@ export default function InsightsScreen() {
   const [period, setPeriod] = useState<Period>('d7');
 
   const { inWindow, buckets, avgScore, totalMinutes } = useMemo(() => {
-    const win = sessionsInWindow(p.sessionHistory, period);
+    const win = sessionsInWindow(p.visibleHistory, period);
     const scored = win.filter((s) => s.score > 0);
     return {
       inWindow: win,
@@ -34,7 +34,7 @@ export default function InsightsScreen() {
           : Math.round(scored.reduce((a, s) => a + s.score, 0) / scored.length),
       totalMinutes: win.reduce((a, s) => a + Math.floor(s.durationMs / 60000), 0),
     };
-  }, [p.sessionHistory, period]);
+  }, [p.visibleHistory, period]);
 
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={styles.scroll}>

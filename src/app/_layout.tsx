@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { Logo } from '@/components/Logo';
 import { PostureProvider } from '@/state/PostureContext';
 import { ThemeProvider, useThemeMode } from '@/theme/ThemeContext';
 import { useAppColors } from '@/theme/useAppColors';
@@ -37,6 +38,7 @@ function AppTabs() {
           headerStyle: { backgroundColor: c.bg },
           headerTitleStyle: { color: c.textPri, fontWeight: '700', letterSpacing: 1 },
           headerShadowVisible: false,
+          headerLeft: () => <Logo />,
           tabBarStyle: {
             backgroundColor: c.surface,
             borderTopColor: c.border,

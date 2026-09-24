@@ -45,7 +45,9 @@ export type ProtocolEvent =
   | { type: 'log'; line: string };
 
 const READING_RE = /(FSR\d+)\s*\([^)]+\):\s*(\d+)/i;
-const BASELINE_RE = /(FSR\d+).*baseline\s*=\s*([\d.]+)/i;
+// The firmware prints "FSR1 (circle) baseline : 523.4". Accept '=' too so a
+// firmware tweak to either spelling keeps working.
+const BASELINE_RE = /(FSR\d+).*baseline\s*[:=]\s*([\d.]+)/i;
 const PROGRESS_RE = /\[([#.]+)\]\s+(\d+)%/;
 const ALERT_DETAIL_RE = /pressure\s+(increased|decreased)\s+by\s+(\d+)/i;
 const SENSOR_KEY_RE = /(FSR\d+)/i;

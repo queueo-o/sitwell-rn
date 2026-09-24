@@ -1,12 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import {
-  SensorConfig,
-  deviationThreshold,
-  pressureLabel,
-  pressureNorm,
-} from '@/models/sensorConfig';
+import { SensorConfig, deviationThreshold, pressureNorm } from '@/models/sensorConfig';
 import { usePosture } from '@/state/PostureContext';
 import { AppColors } from '@/theme/colors';
 import { useAppColors } from '@/theme/useAppColors';
@@ -146,13 +141,9 @@ function SensorTile({ sensor, c }: { sensor: SensorConfig; c: AppColors }) {
       <View style={[styles.track, { backgroundColor: c.surfaceDeep }]}>
         <View style={[styles.fill, { backgroundColor: color, width: `${norm * 100}%` }]} />
       </View>
-      <Text style={[styles.tileMeta, { color: c.textMuted }]}>
-        {sensor.hardwareType} ·{' '}
-        {reading !== undefined ? pressureLabel(sensor.hardwareType, reading) : 'no data'}
-      </Text>
       {baseline !== undefined && (
         <Text style={[styles.tileMeta, { color: c.textMuted }]}>
-          base {Math.round(baseline)}
+          baseline {Math.round(baseline)}
         </Text>
       )}
     </View>

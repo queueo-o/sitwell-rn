@@ -153,21 +153,17 @@ export default function SettingsScreen() {
           value={p.postureReminders}
           onChange={p.savePostureReminders}
         />
-        <Divider c={c} />
+      </View>
+
+      {/* ── Data ───────────────────────────────────────────────────────── */}
+      <SectionLabel c={c}>DATA</SectionLabel>
+      <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border, padding: 0 }]}>
         <ToggleRow
           c={c}
-          title="Session Summaries"
-          subtitle="Recap when a session ends"
-          value={p.sessionSummaries}
-          onChange={p.saveSessionSummaries}
-        />
-        <Divider c={c} />
-        <ToggleRow
-          c={c}
-          title="Streak Nudges"
-          subtitle="Encourage daily consistency"
-          value={p.streakNudges}
-          onChange={p.saveStreakNudges}
+          title="Show sample data"
+          subtitle="Built-in example sessions on History and Insights"
+          value={p.showDemoData}
+          onChange={p.saveShowDemoData}
         />
       </View>
 

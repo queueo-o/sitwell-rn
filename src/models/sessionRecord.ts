@@ -16,6 +16,8 @@ export interface SessionRecord {
   score: number; // 0–100
   slouches: number;
   trend: SessionTrend;
+  /** True for the built-in sample sessions, so Settings can hide them. */
+  isSeed?: boolean;
 }
 
 /** Compare a new score to the previous one to derive a trend. */
@@ -91,6 +93,7 @@ export function seedSessions(): SessionRecord[] {
       score,
       slouches,
       trend,
+      isSeed: true,
     };
   };
 

@@ -93,6 +93,8 @@ interface PostureState {
   postureReminders: boolean;
   sessionSummaries: boolean;
   streakNudges: boolean;
+  /** Hides the built-in sample sessions from History and Insights. */
+  showDemoData: boolean;
 
   hardwareCheckState: HardwareCheckState;
   hardwareCheckMessage: string;
@@ -131,6 +133,7 @@ function initialState(): PostureState {
     postureReminders: true,
     sessionSummaries: true,
     streakNudges: false,
+    showDemoData: true,
 
     hardwareCheckState: 'notRun',
     hardwareCheckMessage: HARDWARE_CHECK_IDLE,
@@ -146,6 +149,7 @@ interface PersistedPrefs {
   postureReminders: boolean;
   sessionSummaries: boolean;
   streakNudges: boolean;
+  showDemoData: boolean;
   sensors: { key: string; displayName: string; isActive: boolean }[];
 }
 
@@ -157,7 +161,14 @@ function toStored(s: SessionRecord): StoredSession {
 }
 
 function fromStored(s: StoredSession): SessionRecord {
-  return { ...s, startedAt: new Date(s.startedAt) };
+  return {
+    ...s,
+    startedAt: new Date(s.startedAt),
+    // Sessions persisted before isSeed existed have no flag. Seed ids are the
+    // small 1001-1012 literals; real sessions use Date.now(), so the magnitude
+    // identifies them without guessing at content.
+    isSeed: s.isSeed ?? s.id < 100_000,
+  };
 }
 
 // ── Derived helpers ─────────────────────────────────────────────────────────
@@ -247,9 +258,12 @@ interface PostureContextValue extends PostureState {
   savePostureReminders: (v: boolean) => void;
   saveSessionSummaries: (v: boolean) => void;
   saveStreakNudges: (v: boolean) => void;
+  saveShowDemoData: (v: boolean) => void;
   clearAllData: () => Promise<void>;
   removeSession: (id: number) => void;
   restoreSession: (session: SessionRecord) => void;
+  /** sessionHistory minus the sample sessions when they're hidden. */
+  visibleHistory: SessionRecord[];
 }
 
 const PostureContext = createContext<PostureContextValue | null>(null);
@@ -960,6 +974,10 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
     setState((prev) => ({ ...prev, streakNudges: v }));
   }, []);
 
+  const saveShowDemoData = useCallback((v: boolean) => {
+    setState((prev) => ({ ...prev, showDemoData: v }));
+  }, []);
+
   /** Wipes history and returns every setting to its default. Not undoable. */
   const clearAllData = useCallback(async () => {
     stopDemoLoop();
@@ -1015,6 +1033,7 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
           next.postureReminders = prefs.postureReminders ?? prev.postureReminders;
           next.sessionSummaries = prefs.sessionSummaries ?? prev.sessionSummaries;
           next.streakNudges = prefs.streakNudges ?? prev.streakNudges;
+          next.showDemoData = prefs.showDemoData ?? prev.showDemoData;
           if (Array.isArray(prefs.sensors)) {
             // Merge by key so a firmware change that adds or renames a sensor
             // slot doesn't resurrect stale entries.
@@ -1045,6 +1064,7 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
       postureReminders: state.postureReminders,
       sessionSummaries: state.sessionSummaries,
       streakNudges: state.streakNudges,
+      showDemoData: state.showDemoData,
       sensors: state.sensors.map((s) => ({
         key: s.key,
         displayName: s.displayName,
@@ -1057,6 +1077,7 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
     state.postureReminders,
     state.sessionSummaries,
     state.streakNudges,
+    state.showDemoData,
     state.sensors,
   ]);
 
@@ -1144,9 +1165,13 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
       savePostureReminders,
       saveSessionSummaries,
       saveStreakNudges,
+      saveShowDemoData,
       clearAllData,
       removeSession,
       restoreSession,
+      visibleHistory: state.showDemoData
+        ? state.sessionHistory
+        : state.sessionHistory.filter((s) => !s.isSeed),
     };
   }, [
     state,
@@ -1169,6 +1194,7 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
     savePostureReminders,
     saveSessionSummaries,
     saveStreakNudges,
+    saveShowDemoData,
     clearAllData,
     removeSession,
     restoreSession,
