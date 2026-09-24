@@ -59,10 +59,15 @@ Six sensors: `fsr1`/`fsr2` circle FSR, `fsr3`/`fsr4` square FSR, `fsr5`/`fsr6`
 velostat. Parsing lives in `src/services/postureProtocol.ts`; the transport is
 `src/services/bleService.ts`.
 
+## What is NOT needed from you
+
+`react-native-svg` (charts) and `@react-native-async-storage/async-storage`
+(saved settings and session history) are both bundled inside Expo Go, so they
+already work without a build. **`react-native-ble-plx` is the only module that
+requires the development build.**
+
 ## Known follow-ups
 
-- Preferences are in-memory only. Persistence needs
-  `@react-native-async-storage/async-storage` (another native module — worth
-  adding in the same build if possible).
 - iOS reconnection is faster if `IOS_PERIPHERAL_ID` in `src/services/bleService.ts`
   is filled in with the peripheral UUID printed on first connect.
+- The optional OpenAI analysis card from the original Flutter app is not ported.

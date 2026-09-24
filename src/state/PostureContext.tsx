@@ -39,6 +39,7 @@ import {
 } from '../models/sessionRecord';
 import { bleService } from '../services/bleService';
 import { ProtocolEvent, ProtocolParser } from '../services/postureProtocol';
+import { KEYS, clearStored, loadJson, saveJson } from '../services/storage';
 
 export type ConnectionState =
   | 'disconnected'
@@ -137,6 +138,27 @@ function initialState(): PostureState {
   };
 }
 
+// ── Persistence ─────────────────────────────────────────────────────────────
+
+interface PersistedPrefs {
+  sessionGoalMinutes: number;
+  postureReminders: boolean;
+  sessionSummaries: boolean;
+  streakNudges: boolean;
+  sensors: { key: string; displayName: string; isActive: boolean }[];
+}
+
+/** SessionRecord with startedAt flattened to an ISO string for JSON. */
+type StoredSession = Omit<SessionRecord, 'startedAt'> & { startedAt: string };
+
+function toStored(s: SessionRecord): StoredSession {
+  return { ...s, startedAt: s.startedAt.toISOString() };
+}
+
+function fromStored(s: StoredSession): SessionRecord {
+  return { ...s, startedAt: new Date(s.startedAt) };
+}
+
 // ── Derived helpers ─────────────────────────────────────────────────────────
 
 function computePostureScore(s: PostureState): number {
@@ -194,6 +216,8 @@ interface PostureContextValue extends PostureState {
   isConnected: boolean;
   isDemoMode: boolean;
   bleAvailable: boolean;
+  /** False until stored preferences have been read back. */
+  hydrated: boolean;
   connectionError: string | null;
   postureScore: number;
   postureLabel: string;
@@ -240,6 +264,7 @@ export function usePosture(): PostureContextValue {
 export function PostureProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<PostureState>(initialState);
   const [notification, setNotification] = useState<PostureNotification | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const [, setTick] = useState(0);
 
   // Latest state, readable from async flows without stale closures.
@@ -946,6 +971,9 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
 
     if (bleService.isAvailable()) await bleService.disconnect();
 
+    await clearStored();
+    // sessionHistory: [] rather than the seeds — and the save effect writes
+    // that empty array back, so a restart stays cleared.
     setState(() => ({ ...initialState(), sessionHistory: [] }));
   }, [stopDemoLoop, stopReadingsPoll]);
 
@@ -964,6 +992,74 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
       ),
     }));
   }, []);
+
+  // ── Hydrate from storage, then keep it in sync ────────────────────────────
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [prefs, history] = await Promise.all([
+        loadJson<PersistedPrefs>(KEYS.prefs),
+        loadJson<StoredSession[]>(KEYS.history),
+      ]);
+      if (cancelled) return;
+
+      setState((prev) => {
+        const next = { ...prev };
+        if (prefs) {
+          next.sessionGoalMinutes = prefs.sessionGoalMinutes ?? prev.sessionGoalMinutes;
+          next.postureReminders = prefs.postureReminders ?? prev.postureReminders;
+          next.sessionSummaries = prefs.sessionSummaries ?? prev.sessionSummaries;
+          next.streakNudges = prefs.streakNudges ?? prev.streakNudges;
+          if (Array.isArray(prefs.sensors)) {
+            // Merge by key so a firmware change that adds or renames a sensor
+            // slot doesn't resurrect stale entries.
+            next.sensors = prev.sensors.map((s) => {
+              const saved = prefs.sensors.find((x) => x.key === s.key);
+              return saved
+                ? { ...s, displayName: saved.displayName, isActive: saved.isActive }
+                : s;
+            });
+          }
+        }
+        // null means "never stored" → keep the seeds. An empty array is a real
+        // value (the user cleared their data) and must be respected.
+        if (history) next.sessionHistory = history.map(fromStored);
+        return next;
+      });
+      setHydrated(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    void saveJson(KEYS.prefs, {
+      sessionGoalMinutes: state.sessionGoalMinutes,
+      postureReminders: state.postureReminders,
+      sessionSummaries: state.sessionSummaries,
+      streakNudges: state.streakNudges,
+      sensors: state.sensors.map((s) => ({
+        key: s.key,
+        displayName: s.displayName,
+        isActive: s.isActive,
+      })),
+    } satisfies PersistedPrefs);
+  }, [
+    hydrated,
+    state.sessionGoalMinutes,
+    state.postureReminders,
+    state.sessionSummaries,
+    state.streakNudges,
+    state.sensors,
+  ]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    void saveJson(KEYS.history, state.sessionHistory.map(toStored));
+  }, [hydrated, state.sessionHistory]);
 
   // Re-render once a second so the session clock ticks.
   useEffect(() => {
@@ -1015,6 +1111,7 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
       isConnected,
       isDemoMode: state.demoMode,
       bleAvailable,
+      hydrated,
       connectionError: bleService.lastError,
       postureScore,
       postureLabel: postureLabelFor(state, postureScore),
@@ -1051,6 +1148,7 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
     state,
     notification,
     bleAvailable,
+    hydrated,
     connect,
     disconnect,
     enableDemoMode,
