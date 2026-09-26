@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomToast } from '@/components/BottomToast';
-import { ChairMap } from '@/components/ChairMap';
 import { ScoreGauge } from '@/components/ScoreGauge';
 import { usePosture } from '@/state/PostureContext';
 import { AppColors } from '@/theme/colors';
@@ -173,7 +172,6 @@ function Connected({ c, scoreColor }: { c: AppColors; scoreColor: string }) {
         )}
       </View>
 
-      <ChairMap c={c} compact />
 
       <View style={styles.statRow}>
         <Stat label="ELAPSED" value={formatDuration(p.sessionDurationMs)} c={c} />
