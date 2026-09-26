@@ -80,15 +80,24 @@ export class ProtocolParser {
         out.push({ type: 'readingsBlockEnd' });
         return out;
       }
-      const m = READING_RE.exec(line);
-      if (m) {
-        out.push({
-          type: 'reading',
-          key: m[1].toLowerCase(),
-          value: parseInt(m[2], 10),
-        });
+      // The firmware does terminate the block with a blank line (code.py:427),
+      // but if that packet is ever dropped the block would swallow every line
+      // after it. A new section banner is an unambiguous exit: close the block
+      // and let the banner fall through to normal handling below.
+      if (/^(---|===)/.test(line)) {
+        this.inReadingsBlock = false;
+        out.push({ type: 'readingsBlockEnd' });
+      } else {
+        const m = READING_RE.exec(line);
+        if (m) {
+          out.push({
+            type: 'reading',
+            key: m[1].toLowerCase(),
+            value: parseInt(m[2], 10),
+          });
+        }
+        return out;
       }
-      return out;
     }
 
     // ── Calibration ───────────────────────────────────────────────────────
