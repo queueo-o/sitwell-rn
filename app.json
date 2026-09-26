@@ -2,6 +2,7 @@
   "expo": {
     "name": "sitwell-rn",
     "slug": "sitwell-rn",
+    "owner": "animalstyledoubledouble",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -12,7 +13,8 @@
       "bundleIdentifier": "org.yourschool.sitwell",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "SitWell uses Bluetooth to connect to your posture sensor.",
-        "NSBluetoothPeripheralUsageDescription": "SitWell uses Bluetooth to connect to your posture sensor."
+        "NSBluetoothPeripheralUsageDescription": "SitWell uses Bluetooth to connect to your posture sensor.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -27,7 +29,9 @@
       "permissions": [
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN"
       ]
     },
     "web": {
@@ -50,6 +54,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f9852968-92fc-4689-9609-e0012f71d953"
+      }
     }
   }
 }
