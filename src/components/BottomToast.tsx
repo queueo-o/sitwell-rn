@@ -130,13 +130,10 @@ export function BottomToast({
         </Text>
 
         {actionLabel && onAction && (
-          <Pressable
-            onPress={() => {
-              onAction();
-              dismiss();
-            }}
-            hitSlop={10}
-            style={styles.action}>
+          // Deliberately does NOT dismiss: the owner decides what happens next.
+          // An undo queue, for instance, wants the next item's toast to appear
+          // rather than the whole queue being torn down.
+          <Pressable onPress={onAction} hitSlop={10} style={styles.action}>
             <Text style={[styles.actionText, { color: fg }]}>{actionLabel}</Text>
           </Pressable>
         )}

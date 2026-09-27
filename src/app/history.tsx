@@ -50,7 +50,10 @@ export default function HistoryScreen() {
   const tabBarHeight = useTabBarHeight();
 
   const [filter, setFilter] = useState<Filter>('all');
-  const [pendingUndo, setPendingUndo] = useState<SessionRecord | null>(null);
+  // LIFO: deleting several in a row queues them, and each undo reveals the
+  // next one rather than stranding the earlier deletions with no way back.
+  const [undoStack, setUndoStack] = useState<SessionRecord[]>([]);
+  const pendingUndo = undoStack.length > 0 ? undoStack[undoStack.length - 1] : null;
 
   const sessions = useMemo(() => {
     const today = startOfDay(new Date());
@@ -73,10 +76,23 @@ export default function HistoryScreen() {
   const handleDelete = useCallback(
     (record: SessionRecord) => {
       p.removeSession(record.id);
-      setPendingUndo(record);
+      setUndoStack((s) => [...s, record]);
     },
     [p],
   );
+
+  const handleUndo = useCallback(() => {
+    setUndoStack((s) => {
+      const next = s.slice(0, -1);
+      const restored = s[s.length - 1];
+      if (restored) p.restoreSession(restored);
+      return next;
+    });
+  }, [p]);
+
+  // Dismissing means "done undoing" — drop the whole queue rather than making
+  // the user swat away one toast per deletion.
+  const handleDismissUndo = useCallback(() => setUndoStack([]), []);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
@@ -133,16 +149,20 @@ export default function HistoryScreen() {
         }}
       />
 
+      {/* Keyed on depth so each undo remounts the toast: fresh slide-in and a
+          fresh 5s timer for the next item in the queue. */}
       <BottomToast
+        key={undoStack.length}
         visible={pendingUndo !== null}
-        message={`Deleted ${pendingUndo?.name ?? ''} session.`}
+        message={
+          undoStack.length > 1
+            ? `Deleted ${pendingUndo?.name ?? ''} session · ${undoStack.length - 1} more`
+            : `Deleted ${pendingUndo?.name ?? ''} session.`
+        }
         tone="neutral"
         actionLabel="UNDO"
-        onAction={() => {
-          if (pendingUndo) p.restoreSession(pendingUndo);
-          setPendingUndo(null);
-        }}
-        onDismiss={() => setPendingUndo(null)}
+        onAction={handleUndo}
+        onDismiss={handleDismissUndo}
         autoHideMs={5000}
         c={c}
         bottomOffset={tabBarHeight}
@@ -169,23 +189,22 @@ function SwipeRow({
   const remove = useCallback(() => onDelete(record), [onDelete, record]);
 
   /**
-   * activeOffsetX/failOffsetY are what make this usable inside a scrolling
-   * list: the pan only claims the gesture once it is clearly horizontal, and
-   * bails the moment it looks like a vertical scroll. Without them the row and
-   * the FlatList fight over every touch, which is what left rows stranded
-   * half-swiped.
+   * Left-only. A single negative activeOffsetX means the pan only claims the
+   * gesture on a leftward drag, so rightward swipes and vertical scrolls both
+   * stay with the FlatList — without that the row and the list fight over
+   * every touch, which is what left rows stranded half-swiped.
    */
   const pan = Gesture.Pan()
-    .activeOffsetX([-16, 16])
+    .activeOffsetX(-16)
     .failOffsetY([-14, 14])
     .onUpdate((e) => {
-      tx.value = e.translationX;
+      // Clamp at 0 so the row can never be dragged to the right.
+      tx.value = Math.min(0, e.translationX);
     })
     .onEnd((e) => {
-      const go = Math.abs(e.translationX) > DISMISS_PX || Math.abs(e.velocityX) > 800;
+      const go = e.translationX < -DISMISS_PX || e.velocityX < -800;
       if (go) {
-        const dir = e.translationX === 0 ? Math.sign(e.velocityX) : Math.sign(e.translationX);
-        tx.value = withTiming(dir * 520, { duration: 170 });
+        tx.value = withTiming(-520, { duration: 170 });
         opacity.value = withTiming(0, { duration: 170 }, (done) => {
           if (done) runOnJS(remove)();
         });
@@ -201,7 +220,7 @@ function SwipeRow({
 
   // Backdrop fades in as the row travels, so the intent reads before release.
   const hintStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(Math.abs(tx.value) / DISMISS_PX, 1),
+    opacity: Math.min(-tx.value / DISMISS_PX, 1),
   }));
 
   const scoreColor =
@@ -218,9 +237,9 @@ function SwipeRow({
 
   return (
     <View style={styles.rowWrap}>
+      {/* Revealed on the right as the row slides left. */}
       <Animated.View style={[styles.deleteHint, { backgroundColor: `${c.pink}2E` }, hintStyle]}>
-        <Ionicons name="trash" size={17} color={c.pink} />
-        <Ionicons name="trash" size={17} color={c.pink} />
+        <Ionicons name="trash" size={18} color={c.pink} />
       </Animated.View>
 
       <GestureDetector gesture={pan}>
@@ -275,8 +294,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
   },
   row: {
     flexDirection: 'row',
