@@ -142,7 +142,9 @@ function initialState(): PostureState {
     hardwareCheckState: 'notRun',
     hardwareCheckMessage: HARDWARE_CHECK_IDLE,
 
-    sessionHistory: seedSessions(),
+    // No samples by default — demo mode is off, and turning it on is what
+    // brings them in. Keeps them out of storage when they are not wanted.
+    sessionHistory: [],
   };
 }
 
@@ -992,16 +994,27 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
       recalibrateSuggested.current = false;
       if (!v && bleService.isAvailable()) void bleService.disconnect();
 
-      setState((prev) => ({
-        ...initialState(),
-        sensors: prev.sensors,
-        sessionHistory: prev.sessionHistory,
-        sessionGoalMinutes: prev.sessionGoalMinutes,
-        postureReminders: prev.postureReminders,
-        sessionSummaries: prev.sessionSummaries,
-        streakNudges: prev.streakNudges,
-        demoModeEnabled: v,
-      }));
+      setState((prev) => {
+        // Sessions the user actually recorded always survive. The samples are
+        // rebuilt from scratch every time demo mode comes on, so deleting them
+        // while exploring never permanently empties the demo — and they are
+        // dropped on the way out rather than lingering in storage unseen.
+        const real = prev.sessionHistory.filter((s) => !s.isSeed);
+        return {
+          ...initialState(),
+          sensors: prev.sensors,
+          sessionHistory: v
+            ? [...seedSessions(), ...real].sort(
+                (a, b) => b.startedAt.getTime() - a.startedAt.getTime(),
+              )
+            : real,
+          sessionGoalMinutes: prev.sessionGoalMinutes,
+          postureReminders: prev.postureReminders,
+          sessionSummaries: prev.sessionSummaries,
+          streakNudges: prev.streakNudges,
+          demoModeEnabled: v,
+        };
+      });
     },
     [stopDemoLoop, stopReadingsPoll],
   );
@@ -1084,9 +1097,15 @@ export function PostureProvider({ children }: { children: React.ReactNode }) {
             });
           }
         }
-        // null means "never stored" → keep the seeds. An empty array is a real
-        // value (the user cleared their data) and must be respected.
         if (history) next.sessionHistory = history.map(fromStored);
+
+        // Demo mode on always implies the samples are present — covers a
+        // restart where they were deleted before the app last closed.
+        if (next.demoModeEnabled && !next.sessionHistory.some((s) => s.isSeed)) {
+          next.sessionHistory = [...seedSessions(), ...next.sessionHistory].sort(
+            (a, b) => b.startedAt.getTime() - a.startedAt.getTime(),
+          );
+        }
         return next;
       });
       setHydrated(true);
