@@ -42,3 +42,28 @@ example
 # generated native folders
 /ios
 /android
+
+# Public repository: local credentials and temporary files
+.env
+.env.*
+!.env.example
+!.env.*.example
+credentials.json
+secrets.h
+secrets.py
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist
+/config/private/
+/tmp/
+.npm-cache/
+.pytest_cache/
+__pycache__/
+*.py[cod]

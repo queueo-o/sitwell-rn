@@ -54,3 +54,13 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Public repository and local configuration
+
+Local `.env` files, environment variants, Firebase native settings, signing
+credentials, and temporary/cache files are ignored by Git. Share blank templates
+such as `.env.example`, not real settings. Client settings in `EXPO_PUBLIC_`
+variables are visible in the installed app; keep server secrets on the backend.
+Ignore rules do not remove files that were already committed.
+
+Optional AI analysis accepts a user-supplied OpenAI key in Settings > Your API key and stores it in the device secure store. No shared trial key is supplied. Analysis is unavailable without a personal key. Shared service credentials should be held by a backend, never added to this repo or an EXPO_PUBLIC_ variable.
