@@ -4,8 +4,7 @@ A posture tracker built into a chair pad instead of something you wear.
 
 Six pressure sensors across the seat and backrest of any ordinary chair feed an
 iOS app over Bluetooth Low Energy. The app learns how you normally sit, then
-scores your posture live, shows which part of the chair you've drifted on, and
-buzzes when you've been slouching.
+scores your posture live, and buzzes when you've been slouching.
 
 <!-- Add a screenshot here: docs/screenshot.png -->
 
@@ -32,7 +31,7 @@ Each sensor type gets its own tolerance, because they don't behave alike:
 | Velostat ×2 | one seat, one backrest | 25% |
 
 Velostat is a large-area pressure film, so a small shift in weight moves its
-reading a lot. Sharing one threshold across all six made it alarm constantly.
+reading a lot.
 
 ## Features
 
