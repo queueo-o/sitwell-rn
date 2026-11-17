@@ -106,25 +106,6 @@ The onboard NeoPixel reports state: dim blue means running but uncalibrated,
 green means calibrated, orange means calibrating, and a red pulse means bad
 posture.
 
-## How the two halves talk
-
-The board is command-driven over the Nordic UART Service rather than streaming
-continuously. The app sends single characters and parses the replies:
-
-| Command | Does | Replies with |
-|---|---|---|
-| `c` | calibrate | progress bars, then per-sensor baselines |
-| `s` | status | a `--- Current Readings ---` block |
-| `r` | reset | clears calibration |
-
-The board also pushes `--- POSTURE ALERT ---` and `--- POSTURE OK ---`
-unprompted once calibrated. Parsing lives in
-[`src/services/postureProtocol.ts`](src/services/postureProtocol.ts); the
-transport is [`src/services/bleService.ts`](src/services/bleService.ts).
-
-Lines are buffered at the byte level rather than per packet, because a BLE
-notification can split a multi-byte character such as `⚠` across two packets.
-
 ## Project structure
 
 ```
